@@ -18,6 +18,15 @@ export class PokemonService {
     private readonly pokemonMod: Model<Pokemon>,
   ) {}
 
+  private _handleError(error: any) {
+    if (error.code === 11000) {
+      throw new BadRequestException(`Pokemon already exists`);
+    }
+    throw new InternalServerErrorException(
+      `Cant create/update/delete Pokemon - Check server logs`,
+    );
+  }
+
   async create(createPokemonDto: CreatePokemonDto) {
     createPokemonDto.name = createPokemonDto.name.toLowerCase();
 
@@ -25,12 +34,7 @@ export class PokemonService {
       const pokemon = await this.pokemonMod.create(createPokemonDto);
       return pokemon;
     } catch (error) {
-      if (error.code === 11000) {
-        throw new BadRequestException(`Pokemon already exists`);
-      }
-      throw new InternalServerErrorException(
-        `Cant create Pokemon - Check server logs`,
-      );
+      this._handleError(error);
     }
   }
 
@@ -79,16 +83,16 @@ export class PokemonService {
       // (Solo sirve para mostrar como respuesta de json, la actualizacion la hace el updateOne)
       return { ...pokemonToUpdate.toJSON(), ...pokemonToUpdate };
     } catch (error) {
-      if (error.code === 11000) {
-        throw new BadRequestException(`Pokemon already exists`);
-      }
-      throw new InternalServerErrorException(
-        `Cant update Pokemon - Check server logs`,
-      );
+      this._handleError(error);
     }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} pokemon`;
+  async remove(id: string) {
+    // const pokemon = await this.pokemonMod.findByIdAndDelete(id);
+    const { deletedCount } = await this.pokemonMod.deleteOne({ _id: id });
+    if (deletedCount === 0)
+      throw new NotFoundException(`Not found pokemon with that id ${id}`);
+
+    return { ok: true, msg: 'Eliminado correctamente' };
   }
 }
