@@ -1,12 +1,11 @@
-import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 
-import { AxiosError } from 'axios';
-import { catchError, firstValueFrom } from 'rxjs';
+import { AxiosAdapter } from 'src/common/adapters/axios.adapter';
+import { CreatePokemonDto } from 'src/pokemon/dto/create-pokemon.dto';
 import { PokemonService } from 'src/pokemon/pokemon.service';
 import { PokemonItf } from './interfaces/pokemon.interface';
 
@@ -15,34 +14,36 @@ export class SeedService {
   private readonly logger = new Logger(SeedService.name);
 
   constructor(
-    private readonly httpSrv: HttpService,
+    private readonly httpSrv: AxiosAdapter,
     private readonly pokemonSrv: PokemonService,
   ) {}
 
   async executeSeed(): Promise<any> {
-    const { data } = await firstValueFrom(
-      this.httpSrv
-        .get<PokemonItf>('https://pokeapi.co/api/v2/pokemon?limit=10')
-        .pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(error.response.data);
-            throw 'An error happened!';
-          }),
-        ),
-    );
+    await this.pokemonSrv.deleteMany();
+    const pokemonToInsert: CreatePokemonDto[] = [];
 
-    data.results.forEach(async ({ name, url }) => {
-      const segments = url.split('/');
-      const no = +segments[segments.length - 2];
-      const body = { name, no };
-      try {
-        await this.pokemonSrv.create(body);
-      } catch (error: any) {
-        throw new InternalServerErrorException(
-          `Cant create Pokemon - Check server logs`,
-        );
-      }
-    });
-    return { ok: true, msg: 'Se insertaron correctamente' };
+    try {
+      const data = await this.httpSrv.get<PokemonItf>(
+        'https://pokeapi.co/api/v2/pokemon?limit=350',
+      );
+      data.results.forEach(async ({ name, url }) => {
+        const segments = url.split('/');
+        const no = +segments[segments.length - 2];
+        pokemonToInsert.push({ name, no });
+      });
+    } catch (error) {
+      this.logger.error('Error fetching data from API', error);
+      throw new InternalServerErrorException(`Error fetch - Check server logs`);
+    }
+
+    try {
+      await this.pokemonSrv.createMany(pokemonToInsert);
+    } catch (error: any) {
+      this.logger.error('Error inserting data into database', error);
+      throw new InternalServerErrorException(
+        `Cant create Pokemon - Check server logs`,
+      );
+    }
+    return { ok: true, msg: 'Pokémon inserted successfully' };
   }
 }

@@ -95,4 +95,20 @@ export class PokemonService {
 
     return { ok: true, msg: 'Eliminado correctamente' };
   }
+
+  async createMany(data: CreatePokemonDto[]) {
+    try {
+      await this.pokemonMod.insertMany(data);
+    } catch (error) {
+      this._handleError(error);
+    }
+  }
+
+  async deleteMany(): Promise<void> {
+    try {
+      await this.pokemonMod.deleteMany({});
+    } catch (error) {
+      this._handleError(error);
+    }
+  }
 }
